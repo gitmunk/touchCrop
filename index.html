@@ -1,0 +1,42 @@
+<html>
+	<head>
+		<title>touchCrop demo example</title>
+		
+		<style>
+			#target {
+				width: 150;
+				height: 200;
+			}
+			
+			#target1 {
+				width: 150;
+				height: 200;
+			}
+	</style>
+	</head>
+	<body>
+	
+	<script type="text/javascript" src="js/jquery.min.js"></script>
+	<script type="text/javascript" src="touchCrop.js"></script>
+
+	<p style="background-color: red;">Loaded automatically
+		<div id="target" data-type="touchCrop" data-url="http://openphoto.net/volumes/sizes/stg/16498/2.jpg"></div>
+	</p>
+	
+	<p  style="background-color: green;">Loaded via script
+		<div id="target1"></div>
+	</p>
+	<script type="text/javascript">
+	
+		$('#target1').touchCrop({url:'http://openphoto.net/volumes/sizes/stg/8732/2.jpg'}, function (api) { 
+			var data = api.getCropped();
+			console.log('Cropped in Base64 png format, length %d bytes.', data.length);
+		});
+		
+		var data = $('#target1')[0].crop.getCropped();
+		console.log('Cropped in Base64 png format, length %d bytes.', data.length);
+	
+	</script>
+	
+	</body>
+</html>
