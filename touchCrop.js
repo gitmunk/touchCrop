@@ -1,10 +1,10 @@
 /*!
- * touchCrop jQuery plugin version 0.1
+ * touchCrop jQuery plugin version 0.2
  *
  * Copyright 2013 Creative Cells AD and other contributors
  * Released under the MIT license
  *
- * Date: 2013-3-17
+ * Date: 2013-4-01
  */
 
 (function ($) {
@@ -19,6 +19,9 @@
 	
 		if((this instanceof Crop) === false)
 			return new Crop(user);
+			
+		if(!el.is('canvas'))
+			return console.error('The selected element should be type canvas.');
 		
 		var self = this
 			, image = new Image();
@@ -47,83 +50,151 @@
 	Crop.prototype.getCropped = function () {
 		var self = this
 			, el = self.el
-			, image = self.image
-			, containerWidth = parseInt(el.css('width'))
-			, containerHeight = parseInt(el.css('height'))
-			, startX = -parseInt(el.css('background-position-x'))
-			, startY = -parseInt(el.css('background-position-y'))
-			, canvas = document.createElement('canvas')
-			, ctx = canvas.getContext('2d');
-			
-		canvas.width = containerWidth;
-		canvas.height = containerHeight;
-		ctx.drawImage(image, startX, startY, containerWidth, containerHeight, 0, 0, containerWidth, containerHeight);
+			, canvas = el[0];
 		
-		return canvas.toDataURL("image/png").replace(/^data:image\/(png|jpg);base64,/, "");
+		return canvas.toDataURL("image/jpeg").replace(/^data:image\/(png|jpg|jpeg);base64,/, "");
 	}
 	
 	Crop.prototype.init = function () {
 		
 		var self = this
 			, el = self.el
+			, canvas = el[0]
+			, ctx = canvas.getContext('2d')
+			, image = self.image
 			, doc = $(document)
 			, containerWidth = parseInt(el.css('width'))
 			, containerHeight = parseInt(el.css('height'))
-			, imageWidth = self.image.width
-			, imageHeight = self.image.height
+			, imageWidth = image.width
+			, imageHeight = image.height
 			, diffWidth = imageWidth - containerWidth
 			, diffHeight = imageHeight - containerHeight
-	
-		self.el.css({
+			, scaleFactor = 1.05
+			, zoomFactor = 1
+			, deltaX = (containerWidth-imageWidth)/2
+			, deltaY = (containerHeight-imageHeight)/2
 		
-			'background-repeat': 'no-repeat',
-			'background-image': 'url("' + self.url + '")',
-			'background-position-x':-imageWidth/2+containerWidth/2,
-			'background-position-y':-imageHeight/2+containerHeight/2
+		CTX = ctx;
+		IMG = image;
+
+		canvas.width = containerWidth;
+		canvas.height = containerHeight;
+
+		var zoom = function (amount) {
+			var factor = Math.pow(scaleFactor,amount);
+			zoomFactor *= factor;
+			ctx.scale(factor,factor);
+			redraw();
+		}
+		
+		var redraw = function () {
+			
+			ctx.save();
+			ctx.setTransform(1,0,0,1,0,0);
+			ctx.clearRect(0,0,canvas.width,canvas.height);
+			ctx.restore();
+			
+			ctx.drawImage(image, deltaX, deltaY);
+		}
+		
+		el.on('mousewheel', function (e) {
+			var evt = e.originalEvent;
+			
+			var delta = evt.wheelDelta ? evt.wheelDelta/40 : evt.detail ? -evt.detail : 0;
+			if (delta) 
+				zoom(delta);
+			
+			return e.preventDefault() && false;
 		});
+
 		
-		self.el.on('touchstart mousedown', function (e) {
-		
+		el.on('touchstart mousedown', function (e) {
+			e.preventDefault();
+			
+			var twoDown = false;
+			
+			var orgX = deltaX;
+			var orgY = deltaY;
 			var startX = e.pageX || e.originalEvent.touches[0].pageX;
 			var startY = e.pageY || e.originalEvent.touches[0].pageY;
+			
+			if(e.type == 'touchstart' && e.originalEvent.targetTouches.length >= 2) {
+				twoDown = true;
+				var touches1 = e.originalEvent.targetTouches[0],
+					touches2 = e.originalEvent.targetTouches[1],
+					dist = Math.sqrt(
+						(touches1.clientX-touches2.clientX) * (touches1.clientX-touches2.clientX) +
+						(touches1.clientY-touches2.clientY) * (touches1.clientY-touches2.clientY));
+			}
+			
+			var movePicture = function (e) {
+				e.preventDefault();
 
-			var mouseMove = function (e) {
-				e.preventDefault()
-				var pageX = e.pageX || e.originalEvent.touches[0].pageX;
-				var pageY = e.pageY || e.originalEvent.touches[0].pageY;
-				var oldX = parseInt(el.css('background-position-x'));
-				var oldY = parseInt(el.css('background-position-y'));
-				
-				var newX = (oldX-(startX-pageX));
-				var newY = (oldY-(startY-pageY));
-				
-				startX = pageX;
-				startY = pageY;
-				
-				if(newX > 0)
-					newX = 0;
+				deltaX = orgX - (startX - (e.pageX || e.originalEvent.touches[0].pageX));
+				deltaY = orgY - (startY - (e.pageY || e.originalEvent.touches[0].pageY));
+				/*
+				if(deltaX > 0)
+					deltaX = 0;
 					
-				if(newY > 0)
-					newY = 0;
+				if(deltaY > 0)
+					deltaY = 0;
 				
-				if(newX < -diffWidth)
-					newX = -diffWidth;
+				if(deltaX*zoomFactor < -diffWidth)
+					deltaX = -diffWidth*zoomFactor;
 					
-				if(newY < -diffHeight)
-					newY = -diffHeight;
-				
-				self.el.css('background-position', newX + 'px ' + newY + 'px');
-			};
+				if(deltaY*zoomFactor < -diffHeight)
+					deltaY = -diffHeight*zoomFactor;
+				*/
+				redraw();
+			}
 			
+			var pinchPanZoom = function (e, start) {
+				var xCoord1 = e.originalEvent.targetTouches[0].clientX
+				var yCoord1 = e.originalEvent.targetTouches[0].clientY
+				var xCoord2 = e.originalEvent.targetTouches[1].clientX
+				var yCoord2 = e.originalEvent.targetTouches[1].clientY
+
+				var xCoord = (xCoord1+xCoord2)/2;
+				var yCoord = (yCoord1+yCoord2)/2;
+				
+				var now = xCoord / yCoord;
+				
+				var touches1 = e.originalEvent.touches[0],
+					touches2 = e.originalEvent.touches[1],
+					dist = Math.sqrt(
+						(touches1.clientX-touches2.clientX) * (touches1.clientX-touches2.clientX) +
+						(touches1.clientY-touches2.clientY) * (touches1.clientY-touches2.clientY));
+
+				if(dist>start)
+					zoom(dist/start)
+				else
+					zoom(-start/dist);
+			}
+			
+			function onMouseMove (evt) {
+				if(!twoDown)
+					movePicture(evt);
+				else {
+					pinchPanZoom(evt, dist);
+				}
+			}
+
 			var mouseUp = function () {
-				doc.off('touchmove mousemove', mouseMove);
+				
+				if(twoDown) { 
+					twoDown = false;
+					return;
+				}
+				
+				doc.off('touchmove mousemove', onMouseMove);
 				doc.off('touchend mouseup', mouseUp);
-			};
+			}
 			
-			doc.on('touchend mouseup', mouseUp);
-			doc.on('touchmove mousemove', mouseMove);
+			doc.on('touchend mouseup', mouseUp);			
+			doc.on('touchmove mousemove', onMouseMove);
 		});
 	
+		redraw();
 	}
 
 	$.fn.touchCrop = function ( config, fn ) {
@@ -150,7 +221,7 @@
 			var $crop = $(this);
 			
 			if(this.crop)
-				return console.log('aaa');
+				return;
 						
 			$crop.touchCrop({url:$crop.attr('data-url')});
 		});
